@@ -9,10 +9,11 @@ const QRCode = require('qrcode');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 경로 설정
-const DATA_DIR = path.join(__dirname, 'data');
+// 환경 및 경로 설정 (Vercel 서버리스 배포 호환)
+const isVercel = !!process.env.VERCEL;
+const DATA_DIR = isVercel ? '/tmp' : path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'album.json');
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const UPLOADS_DIR = isVercel ? '/tmp/uploads' : path.join(__dirname, 'uploads');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 // 디렉토리 자동 생성
@@ -506,17 +507,21 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-// 서버 기동
-app.listen(PORT, '0.0.0.0', () => {
-  const ips = getLocalIpAddresses();
-  console.log('\n======================================================');
-  console.log('🏡 [우리 가족 앨범] 웹 서버가 성공적으로 시작되었습니다!');
-  console.log(`💻 PC 접속 주소      : http://localhost:${PORT}`);
-  if (ips.length > 0) {
-    ips.forEach(ip => {
-      console.log(`📱 스마트폰 접속 주소: http://${ip.address}:${PORT}  (${ip.name})`);
-    });
-  }
-  console.log('📌 같은 Wi-Fi에 연결된 스마트폰으로 위 주소에 접속해 사진을 올릴 수 있습니다.');
-  console.log('======================================================\n');
-});
+// 서버 기동 (직접 실행 시에만 listen, Vercel 및 모듈 임포트 시에는 app export)
+if (!isVercel && require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    const ips = getLocalIpAddresses();
+    console.log('\n======================================================');
+    console.log('🏡 [우리 가족 앨범] 웹 서버가 성공적으로 시작되었습니다!');
+    console.log(`💻 PC 접속 주소      : http://localhost:${PORT}`);
+    if (ips.length > 0) {
+      ips.forEach(ip => {
+        console.log(`📱 스마트폰 접속 주소: http://${ip.address}:${PORT}  (${ip.name})`);
+      });
+    }
+    console.log('📌 같은 Wi-Fi에 연결된 스마트폰으로 위 주소에 접속해 사진을 올릴 수 있습니다.');
+    console.log('======================================================\n');
+  });
+}
+
+module.exports = app;

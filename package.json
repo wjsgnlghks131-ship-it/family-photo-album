@@ -1,0 +1,19 @@
+{
+  "name": "family-photo-album",
+  "version": "1.0.0",
+  "description": "스마트폰과 PC에서 가족끼리 사진을 올리고 댓글을 달 수 있는 우리 가족 앨범 웹 애플리케이션",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "qrcode": "^1.5.3"
+  },
+  "keywords": ["family", "photos", "album", "mobile", "comments"],
+  "author": "",
+  "license": "ISC"
+}

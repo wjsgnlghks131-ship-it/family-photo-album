@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#FAF8F5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="description" content="스마트폰과 PC에서 가족끼리 실시간으로 사진을 올리고 댓글을 나눌 수 있는 우리 가족 앨범입니다.">
+  <title>우리 가족 앨범 🏡 | 소중한 가족 추억 보관소</title>
+
+  <!-- Pretendard & FontAwesome Fonts -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 최상단 헤더 -->
+  <header class="app-header">
+    <div class="header-content">
+      <div class="brand-wrapper" id="btn-home" role="button" title="홈으로 이동">
+        <span class="brand-icon">🏡</span>
+        <div class="brand-text">
+          <h1 class="brand-title">우리 가족 앨범</h1>
+          <span class="brand-subtitle" id="album-subtitle">따뜻한 우리의 소중한 순간들</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-qr" id="btn-open-qr" title="스마트폰으로 접속하기">
+          <i class="fa-solid fa-qrcode"></i>
+          <span class="desktop-only">스마트폰 접속</span>
+        </button>
+        <button class="btn btn-primary btn-upload" id="btn-open-upload" title="새 사진 올리기">
+          <i class="fa-solid fa-camera"></i>
+          <span>사진 올리기</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 메인 컨테이너 -->
+  <main class="main-container">
+    <!-- 상단 컨트롤 섹션: 월별 필터 바 & 보기 모드 전환 -->
+    <section class="controls-section">
+      <!-- 월별 날짜별 빠른 탐색 바 -->
+      <div class="month-scroll-container">
+        <div class="month-filter-track" id="month-filter-track">
+          <!-- JS 동적 생성: 전체보기, 2026년 9월, 8월, 7월 등 -->
+        </div>
+      </div>
+
+      <!-- 보기 모드 전환 탭 & 구성원 필터 바 -->
+      <div class="view-and-filter-bar">
+        <!-- 보기 방식 선택: 피드(타임라인) / 그리드 / 캘린더 -->
+        <div class="view-mode-tabs" role="tablist">
+          <button class="view-tab active" data-mode="feed" id="tab-feed" role="tab" aria-selected="true" title="타임라인 피드로 보기">
+            <i class="fa-solid fa-stream"></i>
+            <span>타임라인 피드</span>
+          </button>
+          <button class="view-tab" data-mode="grid" id="tab-grid" role="tab" aria-selected="false" title="그리드 사진첩으로 보기">
+            <i class="fa-solid fa-table-cells"></i>
+            <span>앨범 갤러리</span>
+          </button>
+          <button class="view-tab" data-mode="calendar" id="tab-calendar" role="tab" aria-selected="false" title="달력으로 날짜별 보기">
+            <i class="fa-regular fa-calendar-days"></i>
+            <span>달력 날짜별</span>
+          </button>
+        </div>
+
+        <!-- 가족 구성원 빠른 필터 -->
+        <div class="member-filter-wrapper">
+          <div class="member-chips" id="member-filter-chips">
+            <button class="member-chip active" data-author="">전체 👨‍👩‍👧‍👦</button>
+            <button class="member-chip" data-author="아빠">아빠 👨</button>
+            <button class="member-chip" data-author="엄마">엄마 👩</button>
+            <button class="member-chip" data-author="딸">딸 👧</button>
+            <button class="member-chip" data-author="아들">아들 👦</button>
+            <button class="member-chip" data-author="할머니">할머니 👵</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 현재 필터 상태 배너 (월/날짜 선택 시 표시) -->
+    <div class="active-filter-banner" id="filter-banner" style="display: none;">
+      <div class="banner-text">
+        <i class="fa-regular fa-calendar-check"></i>
+        <span id="filter-banner-label">2026년 9월 사진</span>
+        <span class="count-badge" id="filter-banner-count">0장</span>
+      </div>
+      <button class="btn-clear-filter" id="btn-clear-filter" title="전체 보기로 돌아가기">
+        <i class="fa-solid fa-rotate-left"></i> 전체 보기
+      </button>
+    </div>
+
+    <!-- 1. 타임라인 피드 뷰 (인스타그램/스토리 피드) -->
+    <section class="view-section active" id="view-feed">
+      <div class="timeline-container" id="feed-container">
+        <!-- JS로 날짜별 그룹 및 사진 카드 렌더링 -->
+      </div>
+    </section>
+
+    <!-- 2. 그리드 갤러리 뷰 (모아보기) -->
+    <section class="view-section" id="view-grid">
+      <div class="grid-container" id="grid-container">
+        <!-- JS로 날짜/월별 사진 그리드 렌더링 -->
+      </div>
+    </section>
+
+    <!-- 3. 달력 날짜별 뷰 (캘린더) -->
+    <section class="view-section" id="view-calendar">
+      <div class="calendar-wrapper">
+        <div class="calendar-header">
+          <button class="btn-cal-nav" id="btn-cal-prev" title="이전 달"><i class="fa-solid fa-chevron-left"></i></button>
+          <h2 class="cal-title" id="cal-current-month">2026년 9월</h2>
+          <button class="btn-cal-nav" id="btn-cal-next" title="다음 달"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div class="calendar-weekdays">
+          <span class="sun">일</span>
+          <span>월</span>
+          <span>화</span>
+          <span>수</span>
+          <span>목</span>
+          <span>금</span>
+          <span class="sat">토</span>
+        </div>
+        <div class="calendar-grid" id="calendar-days">
+          <!-- JS 동적 생성: 해당 월 달력 일자 및 사진 썸네일 -->
+        </div>
+        <!-- 달력에서 선택한 특정 날짜의 사진 목록 드로어/리스트 -->
+        <div class="calendar-selected-day-panel" id="cal-selected-panel" style="display: none;">
+          <div class="panel-header">
+            <h3 id="cal-selected-date-text">2026년 9월 8일 사진 (1장)</h3>
+            <button class="btn-close-panel" id="btn-close-cal-panel"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="selected-day-photos" id="cal-selected-photos"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 데이터 없을 때 빈 화면 안내 -->
+    <div class="empty-state" id="empty-state" style="display: none;">
+      <div class="empty-icon">📷</div>
+      <h3>아직 등록된 추억 사진이 없습니다.</h3>
+      <p>첫 번째 가족 사진을 올리고 소중한 이야기를 남겨보세요!</p>
+      <button class="btn btn-primary" id="btn-empty-upload">
+        <i class="fa-solid fa-camera"></i> 사진 올리기
+      </button>
+    </div>
+  </main>
+
+  <!-- 모바일 하단 플로팅 / 고정 네비게이션 바 -->
+  <nav class="mobile-bottom-nav">
+    <button class="m-nav-item active" data-mode="feed" id="m-nav-feed">
+      <i class="fa-solid fa-stream"></i>
+      <span>타임라인</span>
+    </button>
+    <button class="m-nav-item" data-mode="grid" id="m-nav-grid">
+      <i class="fa-solid fa-table-cells"></i>
+      <span>갤러리</span>
+    </button>
+    <button class="m-nav-fab" id="m-nav-upload" title="사진 올리기">
+      <div class="fab-circle">
+        <i class="fa-solid fa-plus"></i>
+      </div>
+      <span>사진올리기</span>
+    </button>
+    <button class="m-nav-item" data-mode="calendar" id="m-nav-calendar">
+      <i class="fa-regular fa-calendar-days"></i>
+      <span>달력보기</span>
+    </button>
+    <button class="m-nav-item" id="m-nav-qr">
+      <i class="fa-solid fa-qrcode"></i>
+      <span>폰연결</span>
+    </button>
+  </nav>
+
+  <!-- ================= 모달 팝업들 ================= -->
+
+  <!-- 1. 사진 업로드 모달 -->
+  <div class="modal-overlay" id="upload-modal" aria-hidden="true">
+    <div class="modal-dialog upload-dialog" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title">
+      <div class="modal-header">
+        <h2 class="modal-title" id="upload-modal-title">
+          <i class="fa-solid fa-camera-retro"></i> 새 가족 사진 올리기
+        </h2>
+        <button class="modal-close-btn" id="btn-close-upload" title="닫기">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <form id="upload-form" class="modal-body" enctype="multipart/form-data">
+        <!-- 1) 파일 선택 / 드래그 드롭 / 미리보기 영역 -->
+        <div class="upload-dropzone" id="dropzone">
+          <input type="file" id="input-file" name="photo" accept="image/*" class="file-input-hidden">
+          <div class="dropzone-empty" id="dropzone-empty">
+            <div class="upload-icon-circle">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+            </div>
+            <p class="dropzone-prompt"><strong>여기를 터치</strong>하여 스마트폰 사진을 선택하세요</p>
+            <span class="dropzone-hint">카메라 촬영 또는 갤러리 앨범 사진 선택 (JPG, PNG, WEBP)</span>
+          </div>
+          <div class="dropzone-preview" id="dropzone-preview" style="display: none;">
+            <img id="preview-img" src="" alt="업로드 미리보기">
+            <button type="button" class="btn-remove-preview" id="btn-remove-preview" title="사진 다시 고르기">
+              <i class="fa-solid fa-rotate-left"></i> 다른 사진 선택
+            </button>
+          </div>
+        </div>
+
+        <!-- 2) 올리는 사람 (가족 구성원 칩) -->
+        <div class="form-group">
+          <label class="form-label">
+            <span>올리는 사람</span>
+            <span class="label-badge">필수</span>
+          </label>
+          <div class="family-member-selector" id="uploader-selector">
+            <button type="button" class="family-chip active" data-role="👨" data-name="아빠">👨 아빠</button>
+            <button type="button" class="family-chip" data-role="👩" data-name="엄마">👩 엄마</button>
+            <button type="button" class="family-chip" data-role="👧" data-name="딸">👧 딸</button>
+            <button type="button" class="family-chip" data-role="👦" data-name="아들">👦 아들</button>
+            <button type="button" class="family-chip" data-role="👵" data-name="할머니">👵 할머니</button>
+            <button type="button" class="family-chip" data-role="👴" data-name="할아버지">👴 할아버지</button>
+            <button type="button" class="family-chip" data-role="🐾" data-name="반려동물">🐾 막둥이</button>
+            <button type="button" class="family-chip" data-role="✏️" data-name="custom">✏️ 직접입력</button>
+          </div>
+          <div id="custom-uploader-box" style="display: none; margin-top: 8px;">
+            <input type="text" id="input-custom-uploader" class="form-input" placeholder="이름 또는 별칭을 입력하세요 (예: 삼촌, 이모)">
+          </div>
+          <input type="hidden" id="input-author" name="author" value="아빠">
+          <input type="hidden" id="input-author-role" name="authorRole" value="👨">
+        </div>
+
+        <!-- 3) 촬영 날짜 (월별/날짜별 분류의 핵심) -->
+        <div class="form-group">
+          <label class="form-label" for="input-taken-at">
+            <span>사진 찍은 날짜</span>
+            <span class="label-badge">날짜별 정렬</span>
+          </label>
+          <div class="input-icon-wrapper">
+            <i class="fa-regular fa-calendar input-icon"></i>
+            <input type="date" id="input-taken-at" name="takenAt" class="form-input" required>
+          </div>
+        </div>
+
+        <!-- 4) 사진 제목 및 장소 (선택) -->
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="input-title">사진 제목 (선택)</label>
+            <input type="text" id="input-title" name="title" class="form-input" placeholder="예: 주말 공원 나들이">
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="input-location">장소 (선택)</label>
+            <input type="text" id="input-location" name="location" class="form-input" placeholder="예: 우리 집 거실, 제주도">
+          </div>
+        </div>
+
+        <!-- 5) 에피소드 및 이야기 (코멘트) -->
+        <div class="form-group">
+          <label class="form-label" for="input-caption">우리 가족 이야기 / 에피소드</label>
+          <textarea id="input-caption" name="caption" rows="3" class="form-textarea" placeholder="이날 있었던 재미있는 이야기나 전하고 싶은 말을 남겨보세요!"></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-upload">취소</button>
+          <button type="submit" class="btn btn-primary btn-submit" id="btn-submit-upload">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>추억 저장하기</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. 스마트폰 QR 코드 접속 모달 -->
+  <div class="modal-overlay" id="qr-modal" aria-hidden="true">
+    <div class="modal-dialog qr-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
+      <div class="modal-header">
+        <h2 class="modal-title" id="qr-modal-title">
+          <i class="fa-solid fa-mobile-screen"></i> 스마트폰으로 접속하기
+        </h2>
+        <button class="modal-close-btn" id="btn-close-qr" title="닫기">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body qr-body">
+        <div class="qr-preview-box">
+          <img id="qr-image" src="" alt="스마트폰 접속용 QR 코드">
+          <p class="qr-tip"><i class="fa-solid fa-camera"></i> 스마트폰 기본 카메라로 비추면 바로 열립니다</p>
+        </div>
+
+        <div class="network-info-card">
+          <span class="info-label">스마트폰 브라우저 접속 주소:</span>
+          <div class="url-copy-box">
+            <input type="text" id="network-url-text" readonly value="http://localhost:3000">
+            <button class="btn btn-copy" id="btn-copy-url" title="주소 복사">
+              <i class="fa-regular fa-copy"></i> 복사
+            </button>
+          </div>
+        </div>
+
+        <div class="wifi-guide">
+          <h4>💡 가족 스마트폰 연결 안내</h4>
+          <ol>
+            <li>스마트폰이 컴퓨터와 <strong>같은 집 와이파이(Wi-Fi)</strong>에 연결되어 있는지 확인해 주세요.</li>
+            <li>스마트폰의 <strong>기본 카메라</strong>를 켜고 위 QR 코드를 비추면 뜨는 링크를 터치하세요.</li>
+            <li>가족 누구나 스마트폰에서 손쉽게 사진을 올리고 댓글을 달 수 있습니다!</li>
+          </ol>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="btn-ok-qr">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 사진 전체화면 뷰어 & 댓글 상세 모달 (Lightbox) -->
+  <div class="modal-overlay" id="lightbox-modal" aria-hidden="true">
+    <div class="lightbox-dialog" role="dialog" aria-modal="true">
+      <button class="lightbox-close-btn" id="btn-close-lightbox" title="닫기">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="lightbox-content-layout">
+        <!-- 좌측/상단 큰 사진 -->
+        <div class="lightbox-image-wrap">
+          <img id="lightbox-img" src="" alt="상세 사진">
+        </div>
+
+        <!-- 우측/하단 사진 정보 및 댓글 패널 -->
+        <div class="lightbox-info-panel">
+          <div class="panel-user-bar">
+            <div class="author-badge-large">
+              <span class="author-role-emoji" id="lightbox-author-role">👨</span>
+              <div>
+                <h4 id="lightbox-author-name">아빠</h4>
+                <div class="lightbox-meta">
+                  <span id="lightbox-date">2026.09.08</span>
+                  <span id="lightbox-location" class="loc-text"><i class="fa-solid fa-location-dot"></i> 올림픽공원</span>
+                </div>
+              </div>
+            </div>
+            <button class="btn-like-heart" id="lightbox-btn-like" title="좋아요">
+              <i class="fa-solid fa-heart"></i>
+              <span id="lightbox-like-count">0</span>
+            </button>
+          </div>
+
+          <div class="lightbox-caption-box">
+            <h3 id="lightbox-title">주말 공원 나들이</h3>
+            <p id="lightbox-caption">선선한 가을 날씨에 온 가족이 힐링했던 날!</p>
+          </div>
+
+          <!-- 댓글 목록 -->
+          <div class="lightbox-comments-section">
+            <h4 class="comments-heading">
+              <i class="fa-regular fa-comment-dots"></i> 댓글 <span id="lightbox-comments-count">0</span>
+            </h4>
+            <div class="comments-list" id="lightbox-comments-list">
+              <!-- 동적 댓글 아이템들 -->
+            </div>
+          </div>
+
+          <!-- 댓글 입력창 -->
+          <form class="lightbox-comment-form" id="lightbox-comment-form">
+            <!-- 작성자 미니 선택 칩 -->
+            <div class="comment-author-mini-chips" id="lightbox-comment-authors">
+              <button type="button" class="c-chip active" data-name="엄마" data-role="👩">👩 엄마</button>
+              <button type="button" class="c-chip" data-name="아빠" data-role="👨">👨 아빠</button>
+              <button type="button" class="c-chip" data-name="딸" data-role="👧">👧 딸</button>
+              <button type="button" class="c-chip" data-name="아들" data-role="👦">👦 아들</button>
+              <button type="button" class="c-chip" data-name="할머니" data-role="👵">👵 할머니</button>
+            </div>
+            <div class="comment-input-row">
+              <input type="text" id="lightbox-input-comment" class="comment-input" placeholder="따뜻한 한마디를 남겨보세요..." autocomplete="off">
+              <button type="submit" class="btn-comment-submit">등록</button>
+            </div>
+            <!-- 이모지 빠른 리액션 -->
+            <div class="quick-reactions">
+              <button type="button" class="btn-reaction" data-emoji="❤️">❤️</button>
+              <button type="button" class="btn-reaction" data-emoji="👏">👏</button>
+              <button type="button" class="btn-reaction" data-emoji="🥰">🥰</button>
+              <button type="button" class="btn-reaction" data-emoji="🥳">🥳</button>
+              <button type="button" class="btn-reaction" data-emoji="👍">👍</button>
+              <button type="button" class="btn-reaction" data-emoji="☕">☕</button>
+              <button type="button" class="btn-reaction" data-emoji="🍕">🍕</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 토스트 알림 메시지 바 -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- 스크립트 로드 -->
+  <script src="js/seed-data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

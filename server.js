@@ -312,7 +312,7 @@ app.get('/api/photos', async (req, res) => {
         .select('*, comments(*)')
         .order('taken_at', { ascending: false });
 
-      if (!sbErr && dbPhotos && dbPhotos.length > 0) {
+      if (!sbErr && Array.isArray(dbPhotos)) {
         isSupabaseActive = true;
         photos = dbPhotos.map(p => ({
           id: p.id,

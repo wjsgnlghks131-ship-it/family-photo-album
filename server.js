@@ -16,6 +16,20 @@ const DB_FILE = path.join(DATA_DIR, 'album.json');
 const UPLOADS_DIR = isVercel ? '/tmp/uploads' : path.join(__dirname, 'uploads');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
+// Supabase 클라우드 데이터베이스 연동 설정
+const { createClient } = require('@supabase/supabase-js');
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fhxixobykjkcconczpnq.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_oA1AUnFFoTeByUGsb0xwpA_1b3Geya6';
+let supabase = null;
+try {
+  if (SUPABASE_URL && SUPABASE_KEY) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log('⚡ Supabase 클라우드 DB 클라이언트 연결 준비 완료:', SUPABASE_URL);
+  }
+} catch (e) {
+  console.warn('Supabase 초기화 경고:', e.message);
+}
+
 // 디렉토리 자동 생성
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -285,10 +299,51 @@ app.get('/api/network-info', async (req, res) => {
   }
 });
 
-// 2. 사진 목록 조회 (월별/날짜별 필터 및 월별 통계 집계 포함)
-app.get('/api/photos', (req, res) => {
-  const db = readData();
-  let photos = [...db.photos];
+// 2. 사진 목록 조회 (Supabase 클라우드 DB 연동 + 월별/날짜별 필터 및 월별 통계 집계)
+app.get('/api/photos', async (req, res) => {
+  let photos = [];
+  let isSupabaseActive = false;
+
+  // Supabase 클라우드 DB에서 조회 시도
+  if (supabase) {
+    try {
+      const { data: dbPhotos, error: sbErr } = await supabase
+        .from('photos')
+        .select('*, comments(*)')
+        .order('taken_at', { ascending: false });
+
+      if (!sbErr && dbPhotos && dbPhotos.length > 0) {
+        isSupabaseActive = true;
+        photos = dbPhotos.map(p => ({
+          id: p.id,
+          url: p.url,
+          title: p.title || '',
+          caption: p.caption || '',
+          author: p.author || '가족',
+          authorRole: p.author_role || '👨‍👩‍👧‍👦',
+          takenAt: p.taken_at,
+          location: p.location || '',
+          likes: p.likes || 0,
+          createdAt: p.created_at,
+          comments: (p.comments || []).map(c => ({
+            id: c.id,
+            author: c.author,
+            authorRole: c.author_role,
+            text: c.text,
+            createdAt: c.created_at
+          }))
+        }));
+      }
+    } catch (err) {
+      console.warn('Supabase 사진 조회 실패, 로컬 DB로 폴백합니다:', err.message);
+    }
+  }
+
+  // Supabase에 데이터가 없거나 미구축 상태일 때는 로컬 DB 파일 사용
+  if (!isSupabaseActive) {
+    const db = readData();
+    photos = [...db.photos];
+  }
 
   // 날짜 역순(최신순) 정렬: takenAt 기준 내림차순
   photos.sort((a, b) => {
@@ -324,23 +379,25 @@ app.get('/api/photos', (req, res) => {
   // 필터 적용
   const { year, month, date, author, search } = req.query;
 
+  let filtered = [...photos];
+
   if (date) {
-    photos = photos.filter(p => p.takenAt === date);
+    filtered = filtered.filter(p => p.takenAt === date);
   } else if (year && month) {
     const paddedMonth = String(month).padStart(2, '0');
     const ym = `${year}-${paddedMonth}`;
-    photos = photos.filter(p => p.takenAt && p.takenAt.startsWith(ym));
+    filtered = filtered.filter(p => p.takenAt && p.takenAt.startsWith(ym));
   } else if (year) {
-    photos = photos.filter(p => p.takenAt && p.takenAt.startsWith(String(year)));
+    filtered = filtered.filter(p => p.takenAt && p.takenAt.startsWith(String(year)));
   }
 
   if (author) {
-    photos = photos.filter(p => p.author === author);
+    filtered = filtered.filter(p => p.author === author);
   }
 
   if (search) {
     const q = search.toLowerCase();
-    photos = photos.filter(p => 
+    filtered = filtered.filter(p => 
       (p.title && p.title.toLowerCase().includes(q)) ||
       (p.caption && p.caption.toLowerCase().includes(q)) ||
       (p.location && p.location.toLowerCase().includes(q)) ||
@@ -349,22 +406,54 @@ app.get('/api/photos', (req, res) => {
   }
 
   res.json({
-    totalCount: db.photos.length,
-    filteredCount: photos.length,
+    isSupabase: isSupabaseActive,
+    totalCount: photos.length,
+    filteredCount: filtered.length,
     monthsSummary,
-    photos
+    photos: filtered
   });
 });
 
-// 3. 사진 업로드 (파일 업로드 or Base64 / URL 등록 지원)
-app.post('/api/photos', upload.single('photo'), (req, res) => {
+
+// 3. 사진 업로드 (Supabase 클라우드 스토리지 & DB 동시 저장)
+app.post('/api/photos', upload.single('photo'), async (req, res) => {
   try {
-    const db = readData();
     const { title, caption, author, authorRole, takenAt, location, imageUrl } = req.body;
 
     let photoUrl = '';
+
+    // 파일 업로드 처리: Supabase 스토리지 우선 업로드
     if (req.file) {
-      photoUrl = `/uploads/${req.file.filename}`;
+      if (supabase) {
+        try {
+          const fileBuffer = fs.readFileSync(req.file.path);
+          const ext = path.extname(req.file.originalname) || '.jpg';
+          const storageFilename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+          
+          const { data: stData, error: stErr } = await supabase.storage
+            .from('photos')
+            .upload(storageFilename, fileBuffer, {
+              contentType: req.file.mimetype || 'image/jpeg',
+              upsert: true
+            });
+
+          if (!stErr) {
+            const { data: pubData } = supabase.storage.from('photos').getPublicUrl(storageFilename);
+            if (pubData && pubData.publicUrl) {
+              photoUrl = pubData.publicUrl;
+            }
+          } else {
+            console.warn('Supabase 스토리지 업로드 실패(로컬 파일 사용):', stErr.message);
+          }
+        } catch (stEx) {
+          console.warn('Supabase 스토리지 예외(로컬 파일 사용):', stEx.message);
+        }
+      }
+
+      // Supabase 스토리지 업로드가 안 되었을 때는 로컬 경로 사용
+      if (!photoUrl) {
+        photoUrl = `/uploads/${req.file.filename}`;
+      }
     } else if (imageUrl) {
       photoUrl = imageUrl;
     } else {
@@ -389,8 +478,38 @@ app.post('/api/photos', upload.single('photo'), (req, res) => {
       comments: []
     };
 
-    db.photos.unshift(newPhoto);
-    writeData(db);
+    // 1. Supabase photos 테이블에 영구 저장
+    if (supabase) {
+      try {
+        const { error: insertErr } = await supabase.from('photos').insert({
+          id: newPhoto.id,
+          url: newPhoto.url,
+          title: newPhoto.title,
+          caption: newPhoto.caption,
+          author: newPhoto.author,
+          author_role: newPhoto.authorRole,
+          taken_at: newPhoto.takenAt,
+          location: newPhoto.location,
+          likes: 0
+        });
+        if (insertErr) {
+          console.warn('Supabase photos insert 경고:', insertErr.message);
+        } else {
+          console.log('✅ Supabase에 사진이 영구 저장되었습니다:', newPhoto.id);
+        }
+      } catch (dbEx) {
+        console.warn('Supabase DB insert 예외:', dbEx.message);
+      }
+    }
+
+    // 2. 로컬 DB 파일에도 백업 저장
+    try {
+      const db = readData();
+      db.photos.unshift(newPhoto);
+      writeData(db);
+    } catch (e) {
+      console.warn('로컬 DB 백업 기록 오류:', e.message);
+    }
 
     res.status(201).json(newPhoto);
   } catch (err) {
@@ -398,23 +517,15 @@ app.post('/api/photos', upload.single('photo'), (req, res) => {
   }
 });
 
+
 // 4. 사진에 코멘트(댓글) 작성
-app.post('/api/photos/:id/comments', (req, res) => {
+app.post('/api/photos/:id/comments', async (req, res) => {
   const { id } = req.params;
   const { author, authorRole, text } = req.body;
 
   if (!text || !text.trim()) {
     return res.status(400).json({ error: '댓글 내용을 입력해 주세요.' });
   }
-
-  const db = readData();
-  const photo = db.photos.find(p => p.id === id);
-
-  if (!photo) {
-    return res.status(404).json({ error: '사진을 찾을 수 없습니다.' });
-  }
-
-  if (!photo.comments) photo.comments = [];
 
   const newComment = {
     id: 'c-' + Date.now() + '-' + Math.round(Math.random() * 1000),
@@ -424,75 +535,124 @@ app.post('/api/photos/:id/comments', (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  photo.comments.push(newComment);
-  writeData(db);
+  // 1. Supabase comments 테이블에 저장
+  if (supabase) {
+    try {
+      await supabase.from('comments').insert({
+        id: newComment.id,
+        photo_id: id,
+        author: newComment.author,
+        author_role: newComment.authorRole,
+        text: newComment.text
+      });
+      console.log('✅ Supabase에 댓글이 등록되었습니다:', newComment.id);
+    } catch (cErr) {
+      console.warn('Supabase comment insert 예외:', cErr.message);
+    }
+  }
+
+  // 2. 로컬 DB 백업
+  try {
+    const db = readData();
+    const photo = db.photos.find(p => p.id === id);
+    if (photo) {
+      if (!photo.comments) photo.comments = [];
+      photo.comments.push(newComment);
+      writeData(db);
+    }
+  } catch (e) {
+    console.warn('로컬 DB 댓글 저장 오류:', e.message);
+  }
 
   res.status(201).json(newComment);
 });
 
 // 5. 사진 좋아요(하트) 토글
-app.post('/api/photos/:id/like', (req, res) => {
+app.post('/api/photos/:id/like', async (req, res) => {
   const { id } = req.params;
-  const db = readData();
-  const photo = db.photos.find(p => p.id === id);
+  let currentLikes = 0;
 
-  if (!photo) {
-    return res.status(404).json({ error: '사진을 찾을 수 없습니다.' });
-  }
-
-  photo.likes = (photo.likes || 0) + 1;
-  writeData(db);
-
-  res.json({ likes: photo.likes });
-});
-
-// 6. 댓글 삭제
-app.delete('/api/photos/:id/comments/:commentId', (req, res) => {
-  const { id, commentId } = req.params;
-  const db = readData();
-  const photo = db.photos.find(p => p.id === id);
-
-  if (!photo) {
-    return res.status(404).json({ error: '사진을 찾을 수 없습니다.' });
-  }
-
-  const initialCount = photo.comments.length;
-  photo.comments = (photo.comments || []).filter(c => c.id !== commentId);
-
-  if (photo.comments.length === initialCount) {
-    return res.status(404).json({ error: '댓글을 찾을 수 없습니다.' });
-  }
-
-  writeData(db);
-  res.json({ success: true, remainingCount: photo.comments.length });
-});
-
-// 7. 사진 삭제
-app.delete('/api/photos/:id', (req, res) => {
-  const { id } = req.params;
-  const db = readData();
-  const photoIndex = db.photos.findIndex(p => p.id === id);
-
-  if (photoIndex === -1) {
-    return res.status(404).json({ error: '사진을 찾을 수 없습니다.' });
-  }
-
-  const [removed] = db.photos.splice(photoIndex, 1);
-
-  // 로컬 업로드 파일인 경우 실제 파일도 삭제
-  if (removed.url && removed.url.startsWith('/uploads/')) {
-    const filename = path.basename(removed.url);
-    const filePath = path.join(UPLOADS_DIR, filename);
-    if (fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath);
-      } catch (err) {
-        console.warn('파일 삭제 실패:', err.message);
-      }
+  // 1. Supabase에서 좋아요 증가
+  if (supabase) {
+    try {
+      const { data: pData } = await supabase.from('photos').select('likes').eq('id', id).single();
+      currentLikes = ((pData && pData.likes) || 0) + 1;
+      await supabase.from('photos').update({ likes: currentLikes }).eq('id', id);
+    } catch (lErr) {
+      console.warn('Supabase like update 실패:', lErr.message);
     }
   }
 
-  writeData(db);
+  // 2. 로컬 DB 동기화
+  try {
+    const db = readData();
+    const photo = db.photos.find(p => p.id === id);
+    if (photo) {
+      photo.likes = (photo.likes || 0) + 1;
+      currentLikes = photo.likes;
+      writeData(db);
+    }
+  } catch (e) {
+    console.warn('로컬 DB 좋아요 저장 오류:', e.message);
+  }
+
+  res.json({ likes: currentLikes });
+});
+
+// 6. 댓글 삭제
+app.delete('/api/photos/:id/comments/:commentId', async (req, res) => {
+  const { id, commentId } = req.params;
+
+  // 1. Supabase comments 테이블에서 삭제
+  if (supabase) {
+    try {
+      await supabase.from('comments').delete().eq('id', commentId);
+    } catch (cDelErr) {
+      console.warn('Supabase comment delete 실패:', cDelErr.message);
+    }
+  }
+
+  // 2. 로컬 DB 동기화
+  const db = readData();
+  const photo = db.photos.find(p => p.id === id);
+  if (photo && photo.comments) {
+    photo.comments = photo.comments.filter(c => c.id !== commentId);
+    writeData(db);
+  }
+
+  res.json({ success: true });
+});
+
+// 7. 사진 삭제
+app.delete('/api/photos/:id', async (req, res) => {
+  const { id } = req.params;
+
+  // 1. Supabase photos 테이블에서 삭제 (CASCADE로 댓글도 함께 삭제됨)
+  if (supabase) {
+    try {
+      await supabase.from('photos').delete().eq('id', id);
+      console.log('✅ Supabase에서 사진이 삭제되었습니다:', id);
+    } catch (pDelErr) {
+      console.warn('Supabase photo delete 실패:', pDelErr.message);
+    }
+  }
+
+  // 2. 로컬 파일 및 DB 동기화
+  const db = readData();
+  const photoIndex = db.photos.findIndex(p => p.id === id);
+
+  if (photoIndex !== -1) {
+    const [removed] = db.photos.splice(photoIndex, 1);
+    if (removed.url && removed.url.startsWith('/uploads/')) {
+      const filename = path.basename(removed.url);
+      const filePath = path.join(UPLOADS_DIR, filename);
+      if (fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch (err) {}
+      }
+    }
+    writeData(db);
+  }
+
   res.json({ success: true });
 });
 
